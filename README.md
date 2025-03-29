@@ -24,12 +24,12 @@ El texto comprimido se almacena en una estructura con la siguiente organización
 3. Vector de bytes (`vBYT[j]`):
 - Contiene caracteres individuales (si `vb[i] = 0`) o referencias a cadenas previas (si `vb[i] = 1`).
 
-# Representación de la Figura 2 - Compresión de Texto
+# Ejemplo de Compresión
 
 ## Estructura del Texto Comprimido
 **Ejemplo con parámetros:**
 - `M = 8` (primeros 8 caracteres sin comprimir)
-- `N = 6` (longitud mínima para compresión)
+- `N = 4` (longitud mínima para compresión)
 - Texto original: 24 caracteres
 
 ### 1. Texto Original (`v.entrada`)
@@ -69,10 +69,10 @@ El texto comprimido se almacena en una estructura con la siguiente organización
 | Chr| I | E | R | O |   | Q | U | E |   | N | O |   | M | E |    | Q | U | I | E | R |
 | Col| ⬜️ | ⬜️ | ⬜️ | ⬜️ | 🟩 | 🟩 | 🟩 | 🟩 | 🟩 | ⬜️ | ⬜️ | ⬜️ | ⬜️ | 🟦 | 🟦 | 🟦 | 🟦 | 🟦 | 🟦 | 🟦 |
 
-| Pos | 60| 61| 62| 63|
-|-----|----|----|----|----|
-| Chr| A | . | . | . |
-| Col| 🟦 | ⬜️ | ⬜️ | ⬜️ |
+| Pos | 60| 61| 62| 63|64|
+|-----|----|----|----|----|----|
+| Chr| A | . | . | . | \0 |
+| Col| 🟦 | ⬜️ | ⬜️ | ⬜️ | ⬜️ |
 
 **Leyenda:**
 - 🟧 8 primeros caracteres
@@ -80,7 +80,7 @@ El texto comprimido se almacena en una estructura con la siguiente organización
 - 🟩 " que " 
 - 🟦 "e quiera"
 
-## 2. Texto Comprimido
+## 2. Texto Comprimido (Sin Cabecera)
 | Pos | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10| 11| 12| 13| 14| 15| 16| 17| 18| 19|
 |-----|---|---|---|---|---|---|---|---|---|---|---|----|----|----|----|----|----|----|----|----|
 | Chr| C | O | M | O |   | Q | U | I | E | R | E | S |   | Q | U | E |   | T | E |   |
@@ -88,10 +88,25 @@ El texto comprimido se almacena en una estructura con la siguiente organización
 
 | Pos | 20| 21| 22| 23| 24| 25| 26| 27| 28| 29| 30| 31| 32| 33| 34| 35| 36| 37| 38| 39|
 |-----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| Chr| Q | U | I | E | R | A | , |   | S | I |   | E | L | P = **4**  | L = **5** | Q | U | I | E | R |
+| Chr| Q | U | I | E | R | A | , |   | S | I |   | E | L | P=**4**  | L=**5** | Q | U | I | E | R |
 | Col| 🟦 | 🟦 | 🟦 | 🟦 | 🟦 | 🟦 | ⬜️ | ⬜️ | ⬜️ | ⬜️ | ⬜️ | ⬜️ | ⬜️ | 🟩 | 🟩 | ⬜️ | ⬜️ | ⬜️ | ⬜️ | ⬜️ |
 
 | Pos | 40| 41| 42| 43| 44| 45| 46| 47| 48| 49| 50| 51|
 |-----|----|----|----|----|----|----|----|----|----|----|----|----|
-| Chr| O | P = **4** | L = **5** | N | O |   | M | P = **10** | L = **8** | . | . | . |
+| Chr| O | P=**4** | L=**5** | N | O |   | M | P=**10** | L=**8** | . | . | . |
 | Col| ⬜️ | 🟩 | 🟩 | ⬜️ | ⬜️ | ⬜️ | ⬜️ | 🟦 | 🟦 | ⬜️ | ⬜️ | ⬜️ |
+
+## 3. Mapa de Bits
+```bin
+00000000 00000000 00000000 01000000
+10000100 00000000 00000000
+```
+
+```hex
+0x40840000
+```
+
+Bits activos (1):
+- Bit 22 (0x40) → Posición 22
+- Bits 24 y 29 (0x84) → Posiciones 24 y 29
+  *(Posiciones en el texto comprimido)*
