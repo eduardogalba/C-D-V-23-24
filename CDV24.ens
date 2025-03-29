@@ -1,0 +1,476 @@
+PUSH: MACRO(ra) 
+    subu r30, r30, 4 
+    st ra, r30, 0 
+ENDMACRO
+POP: MACRO(ra)
+    ld ra, r30, 0
+    addu r30, r30, 4
+ENDMACRO
+LEA: MACRO(ra, etiqueta)
+    or ra, r0, low(etiqueta)
+    or.u ra, ra, high(etiqueta)
+ENDMACRO
+LOAD: MACRO(ra, etiq)
+	LEA(ra, etiq)
+    ld ra, ra, r0
+ENDMACRO
+
+			org 0x10
+cadena1:	data "ABCDEFGHIJKLMNOPQRSTUVWXYZ\0"
+texto:		data "tres tristes tigres comen trigo en un trigal, el primer tigre que...\0"
+cadena2: 	data "ABCDEFGHIJK\0"
+vacia:		data "\0"
+REF:		data "AAAAAAAAAAAAAAAA\0"
+caracter:	data "A"
+from:		data 5
+to:			data 16
+comprdo:	res 260
+desc: 		res 260
+L1:			res 4
+L2:			res 4
+
+
+			org 0x3E8					; Comienza a partir de la dir memoria 512
+ppal_LongCad:	or r30, r0, 0xF000
+				LEA(r20, cadena1)
+				PUSH(r20)
+				bsr LongCad				; rv = 26
+				addu r30, r30, 4
+				LEA(r20, cadena2)
+				PUSH(r20)
+				bsr LongCad				; rv = 11
+				addu r30, r30, 4
+				LEA(r20, REF)
+				PUSH(r20)
+				bsr LongCad
+				addu r30, r30, 4		; rv = 15
+				stop
+				
+ppal_BuscaCar:	or r30, r0, 0xF000
+				LOAD(r2, from)
+				LOAD(r3, to)
+				LEA(r20, REF)
+				LOAD(r4, caracter)
+				PUSH(r3)
+				PUSH(r2)
+				PUSH(r20)
+				PUSH(r4)
+				bsr BuscaCar
+				addu r30, r30, 16
+				stop
+
+ppal_CoincidenCad:	or r30, r0, 0xF000
+					;LEA(r21, vacia)
+					;LEA(r22, vacia)
+					LEA(r21, cadena1)
+					LEA(r22, cadena2)
+					PUSH(r22)
+					PUSH(r21)
+					bsr CoincidenCad
+					addu r30, r30, 8
+					stop
+
+ppal_Comprime:		or r30, r0, 0xF000
+					LEA(r20, texto)
+					LEA(r21, comprdo)
+					PUSH(r21)
+					PUSH(r20)
+					bsr Comprime
+					addu r30, r30, 8
+					LEA(r21, comprdo)
+					LEA(r20, desc)
+					PUSH(r20)
+					PUSH(r21)
+					bsr Descomprime
+					addu r30, r30, 8
+					stop 
+
+ppal_Verifica:		or r30, r0, 0xF000
+					LEA(r20, texto)
+					LEA(r21, L1)
+					LEA(r22, L2)
+					PUSH(r22)
+					PUSH(r21)
+					PUSH(r20)
+					bsr Verifica
+					addu r30, r30, 12
+					stop
+					
+
+LongCad:    ld r20, r30, r0              ; *cadena
+            or r29, r0, r0              ; long = r29 = 0
+b_longcad:  ld.bu r2, r20, r0           ; r2 = cadena[i]
+            cmp r7, r2, r0              ; ¿Caracter = \0?
+            bb1 eq, r7, f_longcad
+            addu r29, r29, 1            ; long++
+            addu r20, r20, 1            ; cadena++
+            br b_longcad
+f_longcad:  jmp(r1)
+
+
+BuscaCar:   ld r2, r30, r0               ; r2 = Caracter C
+            ld r20, r30, 4              ; r20 = *ref
+            ld r3, r30, 8              ; r3 = from
+            ld r4, r30, 12              ; r4 = to
+
+            addu r20, r20, r3           ; ref[from]
+            or r29, r3, r0              ; distancia = rv = from
+
+b_buscacar: cmp r7, r29, r4              ; ¿from >= to?
+            bb1 hs, r7, f_buscacar
+			ld.bu r5, r20, r0
+            cmp r7, r5, r2              ; ¿ref[i] = C?
+            bb1 eq, r7, f_buscacar      
+            addu r29, r29, 1            ; distancia++
+            addu r20, r20, 1            ; Incremento el puntero ref++
+            br b_buscacar
+f_buscacar: jmp(r1)
+
+
+CoincidenCad:   ld r21, r30, r0                  ; r21 = *cadena1
+                ld r22, r30, 4                  ; r22 = *cadena2
+                or r29, r0, r0                  ; r29 = num_car = 0
+b_coincidencad: ld.bu r2, r21, r0               ; r2 = cadena1[i]
+                ld.bu r3, r22, r0               ; r3 = cadena2[i]
+                cmp r7, r2, r3                  ; ¿cadena1[i] = cadena2[i]?
+                bb1 ne, r7, f_coincidencad
+                cmp r7, r2, r0                  ; Ambas son iguales, ¿he terminado \0?
+                bb1 eq, r7, f_coincidencad
+                addu r29, r29, 1                ; num_car+=1
+                addu r21, r21, 1                ; cadena1++
+                addu r22, r22, 1                ; cadena2++
+                br b_coincidencad
+f_coincidencad: jmp(r1)
+
+
+
+
+Comprime: 	PUSH(r1)
+			PUSH(r31)
+			or r31, r30, r0
+			ld r20, r31, 8				; r20 = texto
+			PUSH(r20)
+			bsr LongCad					; r29 = longitud
+			addu r30, r30, 4
+;;;;;;;;;;; Creacion del marco de pila
+;;;;;;;;;;; Reservar para VL
+			or r10, r29, r0				; r2 = n bytes = longitud (bytes para reservar VL)
+			and r3, r10, 0x3				; Testeo si los 2 ultimos bits son 0
+			cmp r7, r3, r0				; En caso afirmativo, n esta alineado
+			bb1 eq, r7, res_VL	
+			or r7, r0, 4
+			subu r3, r7, r3				; Ajustar a multiplo de 4 (r3 = resto division)
+			addu r10, r10, r3				; r10 = n bytes + (4 - resto division)
+;;;;;;;;;;; Reservar para mapa_bit
+res_VL:		or r3, r29, r0				; r3 = m bits
+			ext r11, r3, 0<3>			; r11 = m/8 
+			and r7, r3, 0x7				; Testeo los 3 ultimos bits
+			cmp r7, r7, r0				; Compruebo si me caben los bits o debo añadir un byte adicional
+			bb1 eq, r7, mult_8
+			addu r11, r11, 1				; r11 = m/8 + 1
+mult_8:		and r5, r11, 0x3				; Compruebo si la reserva esta alineada
+			cmp r7, r5, r0
+			bb1 eq, r7, res_mapa
+			or r7, r0, 4				
+			subu r5, r7, r5				; Sino, debo sumar lo que le falta para estar alineado 			
+			addu r11, r11, r5				; 
+;;;;;;;;;;; Reserva total, mas vars. adicionales
+res_mapa:	or r5, r0, 8				; 8 vars. locales adicionales
+			mak r5, r5, 0<2>			; r5 = 8*4 (bytes)
+			addu r5, r5, r10			; r5 = tam(vars locales) + tam(VL)
+			addu r5, r5, r11			; r5 = tam(vars locales) + tam(VL) + tam(mapa_bit)
+			subu r30, r30, r5			; Reservo el tam en pila
+;;;;;;;;;;; Fin de creacion marco de pila
+			ld r20, r31, 8				; r20 = texto
+			ld r21, r31, 12				; r21 = comprdo
+			or r22, r30, r30				; r22 = VL
+;;;;;;;;;;; Rellena primeros 3 bytes de la cabecera
+			and r7, r29, 0xFF			; Copia parte baja Longitud en B1
+			st.b r7, r21, r0
+			extu r7, r29, 0<8> 		; Copia parte alta Longitud en B0
+			st.b r7, r21, 1
+			or r7, r0, 1				
+			st.b r7, r21, 2				; B3 = 1
+;;;;;;;;;;; Copia de los primeros 8 caracteres
+			or r4, r0, 8				; r4 = contador = 8
+copia_8:	cmp r7, r4, r0
+			bb1 eq, r7, copiado_8
+			ld.bu r3, r20, r0
+			st.b r3, r22, r0
+			addu r20, r20, 1
+			addu r22, r22, 1
+			subu r4, r4, 1
+			br copia_8
+copiado_8:	st r10, r31, -24			; MB_OFFSET = tam(VL) 
+			st r10, r31, -28			; Dir comienzo MB
+			or r2, r0, 8				; r2 = n = 8
+			or r3, r0, r0				; r3 = m = 1
+			; or r5, r0, r0				; r3 = 0000 0000
+			; mak r5, r5, 0<1>			; r3 = 0000 0000  --> No tiene efecto
+			; st.b r5, r30, r10			; M(r30+MB_OFFSET) <- r3 
+			or r6, r0, 8				; r6 = desplazamiento
+b_comprime:	ld.bu r4, r20, r0
+			cmp r7, r4, r0				; ¿texto[i] = '\0'?
+			bb1 eq, r7, f_bcomprime
+			st r20, r31, -4				; Salvo *texto 
+			st r22, r31, -8				; Salvo *VL 
+			st r2, r31, -16				; Guardo n 
+			st r3, r31, -20				; Guardo m
+			st r6, r31, -32
+			subu r23, r31, 12			; r23 = dir(p)
+			ld r24, r31, 8				; r24 = texto
+			PUSH(r23)
+			PUSH(r6)
+			PUSH(r24)
+			bsr BuscaMax
+			addu r30, r30, 12
+			ld r20, r31, -4				; r20 = *texto
+			ld.bu r4, r20, r0			; r4 = texto[i]
+			ld r22, r31, -8				; r22 = vl
+			ld r2, r31, -16				; r2 = n
+			ld r3, r31, -20				; r3 = m 
+			ld r10, r31, -28			; r10 = MB_OFFSET
+			ld r6, r31, -32				; r6 = desplazamiento
+			cmp r7, r3, r0				; Se salta la primera iter m = 0
+			bb1 eq, r7, sigue
+			and r7, r3, 0x7
+			cmp r7, r7, 0				; m % 8 == 0? Pasamos al siguiente byte
+			bb1 ne, r7, sigue			; del mapa_bit
+			addu r10, r10, 1
+			st r10, r31, -28
+sigue:		cmp r7, r29, 4				
+			bb1 hs, r7, ins_ref			; ¿r29 = L < 4?
+			st.b r4, r22, r0			; vl[i] = texto[i]
+			addu r20, r20, 1			; texto++
+			addu r22, r22, 1			; vl++
+			ld.bu r5, r30, r10			; Cargo el byte de mapa_bit
+			mak r5, r5, 0<1>			; r5 <- SHL(r5, 1) 
+			st.b r5, r30, r10			; Salvo el byte
+			addu r2, r2, 1				; n++
+			addu r3, r3, 1				; m++
+			addu r6, r6, 1				; desplazamiento++
+			br b_comprime				; ¿r29 >=4?
+ins_ref:	ld r12, r31, -12			; r12 <- p
+			and r7, r12, 0xFF			; r7 <- Parte baja de r12
+			st.b r7, r22, r0			; (vl) <- Parte baja de p
+			extu r7, r12, 0<8>			; r7 <- SHR(r12, 16) Parte alta de r12
+			st.b r7, r22, 1				; (vl+1) <- Parte alta de p
+			st.b r29, r22, 2			; (vl+2) <- L
+			ld.bu r5, r30, r10			; Cargo el byte de mapa_bit
+			mak r5, r5, 0<1>			; r5 <- SHL(r5, 1)
+			or r5, r5, 1				; r5 <- SHL(r5, 1) OR 1
+			st.b r5, r30, r10			; Salvo el byte
+			addu r20, r20, r29			; texto = texto + L
+			addu r22, r22, 3			; vl+=3			
+			addu r2, r2, 3				; n+=3
+			addu r3, r3, 1				; m++
+			addu r6, r6, r29			; desplazamiento = desplazamiento + L
+			br b_comprime
+f_bcomprime:ld r24, r31, 12				; r24 = comprdo
+			extu r5, r3, 0<3>			; r5 <- m/8
+			and r13, r3, 0x7				; Testeo los 3 ultimos bytes
+			cmp r7, r13, r0				; ¿m es multiplo de 8?
+			bb1 eq, r7, cont
+			ld.bu r4, r30, r10			; Ajuste del ultimo byte de mapa_bit
+			or r7, r0, 8			
+			subu r13, r7, r13			; Añado tantos 0s por la izquierda como (8 -resto)
+			mak r4, r4, r13
+			st.b r4, r30, r10
+			addu r5, r5, 1				; Sino le sumo 1
+cont:		addu r6, r5, 5				; r6 <- r5 = nºbytes mapa_bit + bytes cabecera(5)
+			or r29, r6, r6				; r29 <- mapa_bit(B) + cabecera(5B)
+			addu r29, r29, r2			; r29 <- mapa_bit(B) + cabecera (5B) + VL(B)
+			and r7, r6, 0xFF			; En el B4 de comprdo <- Parte alta (mapa_bit+cabecera) 
+			st.b r7, r24, 3
+			extu r7, r6, 0<8>			; En el B5 de comprdo <- Parte baja (mapa_bit+cabecera)
+			st.b r7, r24, 4
+			addu r24, r24, 5			; r24 <- r24 + 5
+			ld r8, r31, -24				; r8 <- dir comienzo mapa_bit
+copia_mapa:	ld.bu r4, r30, r8
+			cmp r7, r5, r0
+			bb1 eq, r7, fcopia1
+			st.b r4, r24, r0
+			addu r8, r8, 1
+			addu r24, r24, 1
+			subu r5, r5, 1
+			br copia_mapa
+fcopia1: 	or r5, r2, r2
+			or r22, r30, r0
+copia_VL:	ld.bu r4, r22, r0
+			cmp r7, r5, r0
+			bb1 eq, r7, f_comprime
+			st.b r4, r24, r0
+			addu r22, r22, 1
+			addu r24, r24, 1
+			subu r5, r5, 1
+			br copia_VL
+f_comprime:	or r30, r31, r0
+			POP(r31)
+			POP(r1)
+			jmp(r1)
+			
+Descomprime:ld r20, r30, r0			; r20 = com 
+			ld r21, r30, 4			; r21 = desc[0] 
+			addu r22, r20, 5			; r22 = mapa_bit
+			or r23, r21, r0			; r23 = r21
+			or r2, r0, 1			; r2 = n_bits = 1
+			or r29, r0, r0				; r29 = contador_bytes = 0
+			
+			ld.bu r10, r20, r0 			; Parte baja de Longitud Cadena
+			ld.bu r11, r20, 1			; Parte alta de longitud cadena
+			mak r11, r11, 0<8>
+			or r9, r0, r10	
+			or r9, r9, r11
+			ld.bu r3, r20, 2			; r3 = M
+			ld.bu r10, r20, 3		; Parte baja de comienzo
+			ld.bu r11, r20, 4		; Parte alta de comienzo
+			mak r11, r11, 0<8>
+			or r5, r0, r10
+			or r5, r5, r11
+			addu r20, r20, r5		
+			mulu r5, r3, 8			; r5 = contador = 8xM
+desc_8:		cmp r7, r5, r0
+			bb1 eq, r7, b_desc
+			ld.bu r4, r20, r0			; r4 = com[i]
+			st.b r4, r23, r0			; desc[i] = com[i]
+			addu r20, r20, 1			; Avanzo los punteros
+			addu r23, r23, 1
+			addu r29, r29, 1
+			subu r5, r5, 1				; contador--
+			br desc_8	
+b_desc:		cmp r7, r29, r9
+			bb1 hs, r7, f_bdesc
+			cmp r7, r2, 8				; Si n_bits > 8 paso al siguiente byte de mapa_bit
+			bb1 ls, r7, avanza
+			addu r22, r22, 1
+			or r2, r0, 1				; Reseteo n_bits a 1
+avanza:		ld.bu r5, r22, r0			; r5 = byte(mapa_bit)
+			or r6, r0, 8				; r6 = 8
+			subu r6, r6, r2				; r6 = 8 - n_bits
+			extu r6, r5, r6				; r6 = (0,7) r6 = {W5 =00000, O5 = (00000, 00111)} -> SHR(r5, O5)
+			and r6, r6, 0x1				; Nos quedamos con el primer bit LSB
+			cmp r7, r6, 1				; Testeo si es 1 hay referencia
+			bb1 eq, r7, hay_ref			; En caso 0, se copia caracter
+			ld.bu r4, r20, r0
+			st.b r4, r23, r0
+			addu r23, r23, 1			; Avanzamos los punteros
+			addu r20, r20, 1
+			addu r2, r2, 1				; n_bits++
+			addu r29, r29, 1				; contador_bytes++
+			br b_desc
+hay_ref:	ld.bu r3, r20, 2			; r3 = L 
+			ld.bu r10, r20, r0			; r10 <- Parte baja de P 
+			ld.bu r11, r20, 1			; r11 <- Parte alta de P 
+			mak r11, r11, 0<8>
+			or r5, r0, r10
+			or r5, r5, r11
+			addu r24, r21, r5
+b_ref:		cmp r7, r3, r0
+			bb1 eq, r7, f_bref
+			ld.bu r4, r24, r0
+			st.b r4, r23, r0
+			addu r24, r24, 1			; Avanzo los punteros 
+			addu r23, r23, 1
+			addu r29, r29, 1				; contador_bytes++
+			subu r3, r3, 1				; L--
+			br b_ref
+f_bref:		addu r20, r20, 3
+			addu r2, r2, 1
+			br b_desc
+f_bdesc:	st.b r0, r23, r0				; Añado \0 al final de desc
+			jmp(r1)
+
+Verifica: 	PUSH(r1)
+			PUSH(r31)
+			or r31, r30, r0
+			ld r20, r31, 8				; Para la reserva de memoria necesitamos la long del texto
+			PUSH(r20)					; original (L0) por lo que llamamos a LongCad
+			bsr LongCad					; rv = r29 = L0
+			addu r30, r30, 4
+			ld r23, r31, 12				; r23 = &Long1
+			st r29, r23, r0				; M(r23) <- L0
+PilaCom:	addu r10, r29, 5			; r10 <- L0 + 5bytes cabecera
+			addu r4, r29, 7				; r6 = Reserva mapa_bit: L0 + 7
+			extu r6, r4, 0<3>			; r6 = (L0+7)/8
+			subu r6, r6, 1				; r6 = r6 - 1 = (L0+7)/8 - 1
+			addu r10, r10, r6
+alin:		and r5, r10, 0x3			; Comprobamos si esta alineado 
+			cmp r7, r5, r0
+			bb1 eq, r7, PilaDes
+			or r7, r0, 4				; Ajustamos por exceso al siguiente multiplo de 4
+			subu r5, r7, r5
+			addu r10, r10, r5
+PilaDes:	addu r11, r29, 1
+			and r5, r11, 0x3
+			cmp r7, r5, r0
+			bb1 eq, r7, res_ok
+			or r7, r0, 4
+			subu r5, r7, r5
+			addu r11, r11, r5
+res_ok:		or r3, r0, 1			; 1 var adicional para el inicio de PilaDes
+			mak r5, r3, 0<2>
+			addu r5, r5, r10		
+			addu r5, r5, r11		
+			subu r30, r30, r5		; Reserva total de PilaCom + PilaDes
+			st r10, r31, -4			; r10 = Marcador a PilaDes
+			ld r20, r31, 8
+			or r21, r30, r0			; r21 = PilaCom
+			PUSH(r21)				; Comprime(texto, PilaCom)
+			PUSH(r20)
+			bsr Comprime
+			addu r30, r30, 8
+			ld r10, r31, -4
+			or r21, r30, r0			; r21 = PilaCom
+			addu r22, r30, r10		; r22 = PilaDes
+			PUSH(r22)				
+			PUSH(r21)				; Descomprime(PilaCom, PilaDes)
+			bsr Descomprime
+			addu r30, r30, 8
+			ld r10, r31, -4			
+			addu r22, r30, r10		; PilaDes
+			PUSH(r22)				; LongCad(PilaDes) : calcular la longitud del texto descomprimido
+			bsr LongCad
+			addu r30, r30, 4
+			ld r23, r31, 12			; r23  = &Long1
+			ld r3, r23, r0			; r3 = M(&Long1) = Long1
+			ld r10, r31, -4
+			ld r20, r31, 8			
+			ld r24, r31, 16			; r24 = &Long2 
+			st r29, r24, 0			; M(&Long2) = r29
+			cmp r7, r29, r3			; ¿Long1(L0) != Long2?
+			bb0 eq, r7, sal_1		; rv = -1
+			addu r22, r30, r10
+			PUSH(r22)				; CoincidenCad(texto, PilaDes)
+			PUSH(r20)
+			bsr CoincidenCad
+			addu r30, r30, 8
+			ld r23, r31, 12
+			ld r3, r23, r0			; r3 = Long1
+			cmp r7, r29, r3			; ¿r29 != Long1(L0)?
+			bb0 eq, r7, sal_2		; rv = -2
+			or r29, r0, r0
+			br f_verifica
+sal_1:		or r2, r0, 0xFFFF
+			or r29, r2, r0
+			mak r2, r2, 0<16>
+			or r29, r29, r2
+			br f_verifica
+sal_2:		or r2, r0, 0xFFFF
+			mak r2, r2, 0<16>
+			or r29, r2, 0xFFFE 
+			br f_verifica
+f_verifica:	or r30, r31, r0
+			POP(r31)
+			POP(r1)
+			jmp(r1)
+
+;
+; Debe incorporar este fichero con TODAS sus líneas, sin modificar
+; ninguna de ellas, al final de su archivo CDV24.ens
+;
+; Este aviso se refiere también a las líneas de comentario
+; 
+;
+;; Grupo:    ####### - Thu Oct 26 17:42:22 CEST 2023
+
+${{ secrets.BUSCAMAX_FUNCTION }}
